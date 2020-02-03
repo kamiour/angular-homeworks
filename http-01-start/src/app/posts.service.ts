@@ -1,10 +1,12 @@
 import { Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpHeaders, HttpParams, HttpEventType } from '@angular/common/http';
 import { Post } from './post.model';
-import { map } from 'rxjs/operators';
+import { map, catchError, tap } from 'rxjs/operators';
+import { Subject, throwError } from 'rxjs';
 
 @Injectable({providedIn: 'root'})
 export class PostsService {
+    error = new Subject<string>();
     
     constructor(private http: HttpClient) {}
 
@@ -17,17 +19,29 @@ export class PostsService {
         this.http
         .post<{ name: string }>(
             'https://angular-test-project-ea198.firebaseio.com/posts.json',
-            postData
+            postData,
+            {
+                observe: 'response'
+            }
         )
-        .subscribe((responseData) => {
-            console.log(responseData);
-        });
+        .subscribe(
+            (responseData) => {
+                console.log(responseData);
+            },
+            (error) => {
+                this.error.next(error.message);
+            }
+        );
     }
 
     fetchPosts() {
         return this.http
         .get<{ [key: string]: Post }>(
-            'https://angular-test-project-ea198.firebaseio.com/posts.json'
+            'https://angular-test-project-ea198.firebaseio.com/posts.json',
+            {
+                headers: new HttpHeaders({'Custom-Header': 'Hello'}),
+                params: new HttpParams().set('print', 'pretty')
+            }
         )
         .pipe(map(responseData => {
             const postsArray: Post[] = [];
@@ -38,6 +52,28 @@ export class PostsService {
                 }
                 }
                 return postsArray;
+            }),
+            catchError(errorRes => {
+                //send to analytics server
+                return throwError(errorRes);
+            })
+        );
+    }
+
+    deletePosts() {
+        return this.http
+            .delete(
+                'https://angular-test-project-ea198.firebaseio.com/posts.json',
+                {
+                    observe: 'events',
+                    responseType: 'text'
+                }
+            )
+            .pipe(tap(event => {
+                console.log(event);
+                if (event.type === HttpEventType.Response) {
+                    console.log(event.body);
+                }
             }))
     }
 }
